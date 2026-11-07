@@ -1,0 +1,479 @@
+# Generated from a private Home Assistant config by export-public.py; edit there, not here.
+# Personal IDs are replaced with YOUR_* placeholders; Octopus meter IDs with meterserial_* / gasmeterserial_*.
+
+set_min_soc_to_10:
+  alias: Set Min SoC to 10%
+  sequence:
+  - service: number.set_value
+    target:
+      entity_id: number.workshop_min_soc
+    data:
+      value: 10
+  - service: number.set_value
+    target:
+      entity_id: number.workshop_min_soc_on_grid
+    data:
+      value: 10
+  mode: single
+  icon: mdi:battery-10
+'1724255914837':
+  alias: Free Electricity Day Tomorrow
+  sequence:
+  - wait_for_trigger:
+    - at: 08:30:00
+      trigger: time
+    continue_on_timeout: false
+    timeout:
+      hours: 24
+      minutes: 0
+      seconds: 0
+      milliseconds: 0
+  - target:
+      entity_id: select.workshop_work_mode
+    data:
+      option: Feed-in First
+    action: select.select_option
+  - data:
+      enable_force_charge: true
+      enable_charge_from_grid: true
+      start: '{{ as_datetime(states(''input_datetime.free_electricity_start'')).strftime(''%H:%M:%S'')
+        }}'
+      end: '{{ as_datetime(states(''input_datetime.free_electricity_end'')).strftime(''%H:%M:%S'')
+        }}'
+      inverter: YOUR_INVERTER_DEVICE_ID
+      charge_period: '2'
+    action: foxess_modbus.update_charge_period
+  - target:
+      entity_id: number.workshop_max_soc
+    data:
+      value: '100'
+    action: number.set_value
+  - wait_for_trigger:
+    - at: input_datetime.free_electricity_start
+      trigger: time
+    timeout:
+      hours: 12
+      minutes: 0
+      seconds: 0
+      milliseconds: 0
+    continue_on_timeout: false
+  - action: google_sheets.append_sheet
+    continue_on_error: true
+    data:
+      config_entry: YOUR_GOOGLE_SHEETS_ENTRY_ID
+      data:
+        Log: Free Electricity Log
+        Detail: 'Starting with: {{ states(''sensor.workshop_battery_soc'') }}% battery'
+        Detail 2: Grid Consumption so far today = {{ states('sensor.workshop_grid_consumption_energy_today')
+          }} KWh
+  - data:
+      message: 'Starting with: {{ states(''sensor.workshop_battery_soc'') }}% battery,
+        Grid Consumption so far today = {{states(''sensor.workshop_grid_consumption_energy_today'')
+        }} KWh'
+      title: Free Electricity START
+    action: notify.send_message
+    target:
+      entity_id: notify.email_me
+  - wait_for_trigger:
+    - at: input_datetime.free_electricity_end
+      trigger: time
+    timeout:
+      hours: 12
+      minutes: 0
+      seconds: 0
+      milliseconds: 0
+    continue_on_timeout: true
+  - target:
+      entity_id: select.workshop_work_mode
+    data:
+      option: Self Use
+    action: select.select_option
+  - data:
+      enable_force_charge: true
+      enable_charge_from_grid: true
+      start: '15:00:00'
+      end: '15:55:00'
+      inverter: YOUR_INVERTER_DEVICE_ID
+      charge_period: '2'
+    action: foxess_modbus.update_charge_period
+  - delay:
+      hours: 0
+      minutes: 0
+      seconds: 10
+      milliseconds: 0
+  - data:
+      enable_force_charge: false
+      enable_charge_from_grid: true
+      start: '15:00:00'
+      end: '15:55:00'
+      inverter: YOUR_INVERTER_DEVICE_ID
+      charge_period: '2'
+    action: foxess_modbus.update_charge_period
+  - target:
+      entity_id: number.workshop_max_soc
+    data:
+      value: '{{ states(''input_number.max_soc_day'') | float() }}'
+    action: number.set_value
+  - action: google_sheets.append_sheet
+    continue_on_error: true
+    data:
+      config_entry: YOUR_GOOGLE_SHEETS_ENTRY_ID
+      data:
+        Log: Free Electricity Log
+        Detail: 'Ending with: {{ states(''sensor.workshop_battery_soc'') }}% battery'
+        Detail 2: Grid Consumption now = {{ states('sensor.workshop_grid_consumption_energy_today')
+          }} KWh
+  - data:
+      message: 'Ending with with: {{ states(''sensor.workshop_battery_soc'') }}% battery,
+        Grid Consumption now = {{states(''sensor.workshop_grid_consumption_energy_today'')
+        }} KWh'
+      title: Free Electricity END
+    action: notify.send_message
+    target:
+      entity_id: notify.email_me
+  mode: single
+  icon: mdi:home-lightning-bolt
+'1729422205524':
+  alias: Free Electricity Day Today
+  sequence:
+  - target:
+      entity_id: select.workshop_work_mode
+    data:
+      option: Force Discharge
+    action: select.select_option
+  - data:
+      enable_force_charge: true
+      enable_charge_from_grid: true
+      start: '{{ as_datetime(states(''input_datetime.free_electricity_start'')).strftime(''%H:%M:%S'')
+        }}'
+      end: '{{ as_datetime(states(''input_datetime.free_electricity_end'')).strftime(''%H:%M:%S'')
+        }}'
+      inverter: YOUR_INVERTER_DEVICE_ID
+      charge_period: '2'
+    action: foxess_modbus.update_charge_period
+  - target:
+      entity_id: number.workshop_max_soc
+    data:
+      value: '100'
+    action: number.set_value
+  - wait_for_trigger:
+    - at: input_datetime.free_electricity_start
+      trigger: time
+    timeout:
+      hours: 12
+      minutes: 0
+      seconds: 0
+      milliseconds: 0
+    continue_on_timeout: false
+  - target:
+      entity_id: select.workshop_work_mode
+    data:
+      option: Self Use
+    action: select.select_option
+  - action: google_sheets.append_sheet
+    continue_on_error: true
+    data:
+      config_entry: YOUR_GOOGLE_SHEETS_ENTRY_ID
+      data:
+        Log: Free Electricity Log
+        Detail: 'Starting with: {{ states(''sensor.workshop_battery_soc'') }}% battery'
+        Detail 2: Grid Consumption so far today = {{ states('sensor.workshop_grid_consumption_energy_today')
+          }} KWh
+  - data:
+      message: 'Starting with: {{ states(''sensor.workshop_battery_soc'') }}% battery,
+        Grid Consumption so far today = {{states(''sensor.workshop_grid_consumption_energy_today'')
+        }} KWh'
+      title: Free Electricity START
+    action: notify.send_message
+    target:
+      entity_id: notify.email_me
+  - wait_for_trigger:
+    - at: input_datetime.free_electricity_end
+      trigger: time
+    timeout:
+      hours: 12
+      minutes: 0
+      seconds: 0
+      milliseconds: 0
+    continue_on_timeout: true
+  - target:
+      entity_id: select.workshop_work_mode
+    data:
+      option: Self Use
+    action: select.select_option
+  - data:
+      enable_force_charge: true
+      enable_charge_from_grid: true
+      start: '15:00:00'
+      end: '15:55:00'
+      inverter: YOUR_INVERTER_DEVICE_ID
+      charge_period: '2'
+    action: foxess_modbus.update_charge_period
+  - delay:
+      hours: 0
+      minutes: 0
+      seconds: 10
+      milliseconds: 0
+  - data:
+      enable_force_charge: false
+      enable_charge_from_grid: true
+      start: '15:00:00'
+      end: '15:55:00'
+      inverter: YOUR_INVERTER_DEVICE_ID
+      charge_period: '2'
+    action: foxess_modbus.update_charge_period
+  - target:
+      entity_id: number.workshop_max_soc
+    data:
+      value: '{{ states(''input_number.max_soc_day'') | float() }}'
+    action: number.set_value
+  - action: google_sheets.append_sheet
+    continue_on_error: true
+    data:
+      config_entry: YOUR_GOOGLE_SHEETS_ENTRY_ID
+      data:
+        Log: Free Electricity Log
+        Detail: 'Ending with: {{ states(''sensor.workshop_battery_soc'') }}% battery'
+        Detail 2: Grid Consumption now = {{ states('sensor.workshop_grid_consumption_energy_today')
+          }} KWh
+  - data:
+      message: 'Ending with with: {{ states(''sensor.workshop_battery_soc'') }}% battery,
+        Grid Consumption now = {{states(''sensor.workshop_grid_consumption_energy_today'')
+        }} KWh'
+      title: Free Electricity END
+    action: notify.send_message
+    target:
+      entity_id: notify.email_me
+  mode: single
+  icon: mdi:home-lightning-bolt
+stop_using_battery_set_min_soc_to_current_level:
+  alias: Stop using battery (set Min SoC to current level)
+  sequence:
+  - service: number.set_value
+    target:
+      entity_id: number.workshop_min_soc
+    data:
+      value: '{{ states(''sensor.workshop_battery_soc'') }}'
+  - service: number.set_value
+    target:
+      entity_id: number.workshop_min_soc_on_grid
+    data:
+      value: '{{ states(''sensor.workshop_battery_soc'') }}'
+  mode: single
+  icon: mdi:battery-off
+update_octopus_energy_tariffs_with_change_detection:
+  alias: Update Octopus Energy Tariffs with Change Detection
+  variables:
+    import_previous: '{{ states(''sensor.octopus_energy_electricity_meterserial_importmpan_previous_rate'')                                                               |
+      float(0) }}'
+    import_current: '{{ states(''sensor.octopus_energy_electricity_meterserial_importmpan_current_rate'')                                                                 |
+      float(0) }}'
+    import_next: '{{ states(''sensor.octopus_energy_electricity_meterserial_importmpan_next_rate'')                                                                       |
+      float(0) }}'
+    export_previous: '{{ states(''sensor.octopus_energy_electricity_meterserial_exportmpan_export_previous_rate'')                                                        |
+      float(0) }}'
+    export_current: '{{ states(''sensor.octopus_energy_electricity_meterserial_exportmpan_export_current_rate'')
+      | float(0) }}'
+    export_next: '{{ states(''sensor.octopus_energy_electricity_meterserial_exportmpan_export_next_rate'')                                                                |
+      float(0) }}'
+    gas_today: '{{ states(''sensor.octopus_energy_gas_gasmeterserial_mprn_current_rate'')                                                                              |
+      float(0) }}'
+    changed_tariffs: ''
+  sequence:
+  - if:
+    - condition: template
+      value_template: '{{ import_previous > 0 and import_previous != states(''input_number.import_rate_eco'')
+        | float(0) }}'
+    then:
+    - variables:
+        old_val: '{{ states(''input_number.import_rate_eco'') | float(0) }}'
+    - action: input_number.set_value
+      data:
+        entity_id: input_number.import_rate_eco
+        value: '{{ import_previous }}'
+    - variables:
+        changed_tariffs: '{{ changed_tariffs + ''
+
+          Import Eco: '' ~ old_val ~ ''p → '' ~ import_previous ~ ''p ('' ~ (''▲''
+          if import_previous > old_val else                                                                                     ''▼'')
+          ~ '')'' }}'
+  - if:
+    - condition: template
+      value_template: '{{ import_current > 0 and import_current != states(''input_number.import_rate_day'')                                                             |
+        float(0) }}'
+    then:
+    - variables:
+        old_val: '{{ states(''input_number.import_rate_day'') | float(0) }}'
+    - action: input_number.set_value
+      data:
+        entity_id: input_number.import_rate_day
+        value: '{{ import_current }}'
+    - variables:
+        changed_tariffs: '{{ changed_tariffs + ''
+
+          Import Day: '' ~ old_val ~ ''p → '' ~ import_current ~ ''p ('' ~ (''▲''
+          if import_current > old_val else                                                                                       ''▼'')
+          ~ '')'' }}'
+  - if:
+    - condition: template
+      value_template: '{{ import_next > 0 and import_next != states(''input_number.import_rate_peak'')
+        | float(0) }}'
+    then:
+    - variables:
+        old_val: '{{ states(''input_number.import_rate_peak'') | float(0) }}'
+    - action: input_number.set_value
+      data:
+        entity_id: input_number.import_rate_peak
+        value: '{{ import_next }}'
+    - variables:
+        changed_tariffs: '{{ changed_tariffs + ''
+
+          Import Peak: '' ~ old_val ~ ''p →                                                                                    ''
+          ~ import_next ~ ''p ('' ~ (''▲'' if import_next > old_val else ''▼'')                                                                                      ~
+          '')'' }}'
+  - if:
+    - condition: template
+      value_template: '{{ export_previous > 0 and export_previous != states(''input_number.feed_in_rate_eco'')                                                          |
+        float(0) }}'
+    then:
+    - variables:
+        old_val: '{{ states(''input_number.feed_in_rate_eco'') | float(0) }}'
+    - action: input_number.set_value
+      data:
+        entity_id: input_number.feed_in_rate_eco
+        value: '{{ export_previous }}'
+    - variables:
+        changed_tariffs: '{{ changed_tariffs + ''
+
+          Export Eco: '' ~ old_val ~ ''p →                                                                                     ''
+          ~ export_previous ~ ''p ('' ~ (''▲'' if export_previous > old_val else ''▼'')
+          ~ '')'' }}'
+  - if:
+    - condition: template
+      value_template: '{{ export_current > 0 and export_current != states(''input_number.feed_in_rate_day'')
+        | float(0) }}'
+    then:
+    - variables:
+        old_val: '{{ states(''input_number.feed_in_rate_day'') | float(0) }}'
+    - action: input_number.set_value
+      data:
+        entity_id: input_number.feed_in_rate_day
+        value: '{{ export_current }}'
+    - variables:
+        changed_tariffs: '{{ changed_tariffs + ''
+
+          Export Day: '' ~ old_val ~ ''p → '' ~ export_current ~ ''p ('' ~ (''▲''
+          if export_current > old_val else                                                                                       ''▼'')
+          ~ '')'' }}'
+  - if:
+    - condition: template
+      value_template: '{{ export_next > 0 and export_next != states(''input_number.feed_in_rate_peak'')
+        | float(0) }}'
+    then:
+    - variables:
+        old_val: '{{ states(''input_number.feed_in_rate_peak'') | float(0) }}'
+    - action: input_number.set_value
+      data:
+        entity_id: input_number.feed_in_rate_peak
+        value: '{{ export_next }}'
+    - variables:
+        changed_tariffs: '{{ changed_tariffs + ''
+
+          Export Peak: '' ~ old_val ~ ''p → '' ~ export_next ~ ''p ('' ~ (''▲'' if
+          export_next > old_val else ''▼'')                                                                                      ~
+          '')'' }}'
+  - if:
+    - condition: template
+      value_template: '{{ gas_today > 0 and gas_today != states(''input_number.gas_rate'')
+        | float(0) }}'
+    then:
+    - variables:
+        old_val: '{{ states(''input_number.gas_rate'') | float(0) }}'
+    - action: input_number.set_value
+      data:
+        entity_id: input_number.gas_rate
+        value: '{{ gas_today }}'
+    - variables:
+        changed_tariffs: '{{ changed_tariffs + ''
+
+          Gas Rate: '' ~ old_val ~ ''p → '' ~ gas_today ~ ''p ('' ~ (''▲'' if gas_today
+          > old_val else ''▼'') ~                                                                                        '')''
+          }}'
+  - if:
+    - condition: template
+      value_template: '{{ changed_tariffs | length > 0 }}'
+    then:
+    - action: notify.send_message
+      data:
+        title: Octopus Tariff Update
+        message: 'The following tariffs were updated: {{ changed_tariffs }}'
+      target:
+        entity_id: notify.email_me
+    - action: google_sheets.append_sheet
+      continue_on_error: true
+      data:
+        config_entry: YOUR_GOOGLE_SHEETS_ENTRY_ID
+        data:
+          Log: Octopus Tariff Update
+          Detail: 'The following tariffs were updated: {{ changed_tariffs }}'
+  mode: single
+  description: ''
+energy_apply_current_tariff:
+  alias: 'Energy: apply tariff for the current time'
+  description: 'Sets the utility meter tariff selects (grid consumption + feed in,
+    house + workshop, heat pump energy in) to eco/day/peak from the Octopus Flux time
+    helpers. While an armed free electricity slot is running, the workshop grid consumption
+    and heat pump meters are set to ''free'' instead (#801, #1106). Called by ''Energy:
+    Octopus Flux Tariffs'' and the free electricity slot automation.'
+  icon: mdi:cash-clock
+  mode: queued
+  max: 5
+  sequence:
+  - variables:
+      tariff: '{%- set t = now().strftime(''%H:%M:%S'') -%}
+
+        {%- set es = states(''input_datetime.off_peak_energy_start'') -%}
+
+        {%- set ee = states(''input_datetime.off_peak_energy_end'') -%}
+
+        {%- set ps = states(''input_datetime.peak_energy_start'') -%}
+
+        {%- set pe = states(''input_datetime.peak_energy_end'') -%}
+
+        {%- set in_eco = (es <= t and t < ee) if es <= ee else (t >= es or t < ee)
+        -%}
+
+        {%- set in_peak = (ps <= t and t < pe) if ps <= pe else (t >= ps or t < pe)
+        -%}
+
+        {{ ''eco'' if in_eco else (''peak'' if in_peak else ''day'') }}'
+      free_now: '{%- set s = state_attr(''input_datetime.free_electricity_start'',
+        ''timestamp'') | float(0) -%}
+
+        {%- set e = state_attr(''input_datetime.free_electricity_end'', ''timestamp'')
+        | float(0) -%}
+
+        {%- set n = now().timestamp() -%}
+
+        {{ is_state(''input_boolean.free_electricity_armed'', ''on'') and s <= n and
+        n < e }}'
+  - action: select.select_option
+    target:
+      entity_id:
+      - select.grid_consumption_workshop
+      - select.heat_pump_energy_in
+    data:
+      option: '{{ ''free'' if free_now else tariff }}'
+  - action: select.select_option
+    target:
+      entity_id:
+      - select.grid_consumption_house
+      - select.feed_in_house
+      - select.feed_in_workshop
+    data:
+      option: '{{ tariff }}'
+  - action: logbook.log
+    data:
+      name: Tariff
+      message: 'Applied tariff {{ tariff }}{{ '' (workshop grid consumption + heat
+        pump: free)'' if free_now else '''' }}'

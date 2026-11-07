@@ -1,0 +1,1046 @@
+# Generated from a private Home Assistant config by export-public.py; edit there, not here.
+# Personal IDs are replaced with YOUR_* placeholders; Octopus meter IDs with meterserial_* / gasmeterserial_*.
+
+- id: '1704106743392'
+  alias: 'Energy: Octopus Flux Tariffs'
+  description: 'Sets the tariff at each Flux boundary via script.energy_apply_current_tariff
+    (which also keeps ''free'' during an armed free electricity slot, #801)'
+  triggers:
+  - trigger: time
+    at: input_datetime.off_peak_energy_start
+  - trigger: time
+    at: input_datetime.off_peak_energy_end
+  - trigger: time
+    at: input_datetime.peak_energy_start
+  - trigger: time
+    at: input_datetime.peak_energy_end
+  - trigger: homeassistant
+    event: start
+  conditions: []
+  actions:
+  - action: script.energy_apply_current_tariff
+  mode: single
+- id: '1704185991516'
+  alias: 'Energy: Battery Max SoC setting'
+  description: Sets the Max SoC according to the time of day based on tariffs using
+    the input number values on dashboard
+  trigger:
+  - platform: time
+    at: input_datetime.off_peak_energy_start
+    variables:
+      maxSoC: '{{ states(''input_number.max_soc_eco'') | float(states(''number.workshop_min_soc''))
+        }}'
+  - platform: time
+    at: input_datetime.off_peak_energy_end
+    variables:
+      maxSoC: '{{ states(''input_number.max_soc_day'') | float(states(''number.workshop_min_soc''))
+        }}'
+  - platform: time
+    at: input_datetime.peak_energy_start
+    variables:
+      maxSoC: '{{ states(''input_number.max_soc_peak'') | float(states(''number.workshop_min_soc''))
+        }}'
+  - platform: time
+    at: input_datetime.peak_energy_end
+    variables:
+      maxSoC: '{{ states(''input_number.max_soc_day'') | float(states(''number.workshop_min_soc''))
+        }}'
+  condition: []
+  action:
+  - service: number.set_value
+    target:
+      entity_id: number.workshop_max_soc
+    data:
+      value: '{{ maxSoC }}'
+  mode: single
+- id: '1706128884321'
+  alias: 'Energy: Flux tariff: Work Mode around peak tariff times when Force exporting'
+  description: Sets the inverter's Work Mode at start and end of peak tariff times
+  triggers:
+  - at: input_datetime.peak_energy_start
+    variables:
+      workmode: Force Discharge
+    trigger: time
+  - at: input_datetime.peak_energy_end
+    variables:
+      workmode: Self Use
+    trigger: time
+  conditions:
+  - condition: state
+    entity_id: input_boolean.peak_tariff_export_enabled
+    state: 'on'
+  actions:
+  - target:
+      entity_id: select.workshop_work_mode
+    data:
+      option: '{{ workmode }}'
+    action: select.select_option
+  mode: single
+- id: '1718360862145'
+  alias: 'Energy: Battery Min SoC setting'
+  description: Sets the Min SoC according to the time of day based on tariffs using
+    the input number values on dashboard
+  trigger:
+  - platform: time
+    at: input_datetime.off_peak_energy_start
+    variables:
+      minSoC: '{{ float(states(''input_number.min_soc_eco'')) }}'
+  - platform: time
+    at: input_datetime.off_peak_energy_end
+    variables:
+      minSoC: '{{ float(states(''input_number.min_soc_day'')) }}'
+  - platform: time
+    at: input_datetime.peak_energy_start
+    variables:
+      minSoC: '{{ float(states(''input_number.min_soc_peak'')) }}'
+  - platform: time
+    at: input_datetime.peak_energy_end
+    variables:
+      minSoC: '{{ float(states(''input_number.min_soc_day'')) }}'
+  condition: []
+  action:
+  - service: number.set_value
+    target:
+      entity_id: number.workshop_min_soc
+    data:
+      value: '{{ minSoC }}'
+  - service: number.set_value
+    target:
+      entity_id: number.workshop_min_soc_on_grid
+    data:
+      value: '{{ minSoC }}'
+  mode: single
+- id: '1718709626558'
+  alias: 'Energy: Battery Switch Work mode from Force Discharge to Feed-in First -
+    when target Force Discharge SoC level achieved'
+  description: Sets the work mode back to Feed-in First (from Force Discharge) once
+    the target SoC acheived. - it 'polls' every 5 minutes during the 16th, 17th &
+    18th hours to check condition
+  triggers:
+  - hours: 16
+    minutes: /5
+    trigger: time_pattern
+  - hours: 17
+    minutes: /5
+    trigger: time_pattern
+  - hours: 18
+    minutes: /5
+    trigger: time_pattern
+  conditions:
+  - and:
+    - condition: template
+      value_template: '{{ states(''select.workshop_work_mode'') == ''Force Discharge''
+        }}'
+    - condition: template
+      value_template: '{{ states(''sensor.workshop_battery_soc'')|float(0) <= states(''input_number.target_soc_force_export'')|float(0)
+        }}'
+  actions:
+  - variables:
+      workmode: Feed-in First
+  - target:
+      entity_id: select.workshop_work_mode
+    data:
+      option: '{{ workmode }}'
+    action: select.select_option
+  mode: single
+- id: '1719987517277'
+  alias: 'Energy: Battery: Enable 2nd charge period before Peak Tariff period'
+  description: Sets the 2nd charge period to enable in the hours before the peak tariff
+    if SoC below Max SoC minus Daytime Charge Offset %
+  triggers:
+  - hours: 14
+    minutes: /5
+    trigger: time_pattern
+  - hours: 15
+    minutes: /5
+    trigger: time_pattern
+  conditions:
+  - and:
+    - condition: template
+      value_template: '{{ states(''binary_sensor.workshop_time_period_2_enable_force_charge'')
+        == ''off'' }}'
+    - condition: template
+      value_template: "{{ states('sensor.workshop_battery_soc')|float(0) <=\n   states('number.workshop_max_soc')|float(0)
+        -\n   states('input_number.daytime_charge_offset')|float(0) }}"
+  actions:
+  - data:
+      inverter: YOUR_INVERTER_DEVICE_ID
+      charge_period: '2'
+      enable_charge_from_grid: true
+      enable_force_charge: true
+      start: '14:00:00'
+      end: '15:55:00'
+    action: foxess_modbus.update_charge_period
+  - action: google_sheets.append_sheet
+    continue_on_error: true
+    data:
+      config_entry: YOUR_GOOGLE_SHEETS_ENTRY_ID
+      data:
+        Log: Daytime pre-PEAK charge log
+        Detail: Grid Consumption so far today = {{ states('sensor.workshop_grid_consumption_energy_today')
+          }} KWh
+        Detail 2: Enabled at {{ states('sensor.workshop_battery_soc') }}%
+  mode: single
+- id: '1719987790324'
+  alias: 'Energy: Battery: Disable 2nd charge period before the Peak Tarriff'
+  description: Disables the 2nd charge period if SoC >= the batteries current Max
+    SoC % in hour before peak tarriff
+  trigger:
+  - platform: time_pattern
+    hours: 15
+    minutes: /5
+  - platform: time
+    at: '16:00:00'
+  condition:
+  - and:
+    - condition: template
+      value_template: '{{ states(''binary_sensor.workshop_time_period_2_enable_force_charge'')
+        == ''on'' }}'
+    - condition: template
+      value_template: "{{ states('sensor.workshop_battery_soc')|float(0) >=\n   states('number.workshop_max_soc')|float(0)
+        }}"
+  action:
+  - service: foxess_modbus.update_charge_period
+    data:
+      inverter: YOUR_INVERTER_DEVICE_ID
+      charge_period: '2'
+      enable_charge_from_grid: true
+      enable_force_charge: false
+      start: '15:00:00'
+      end: '15:55:00'
+  - action: google_sheets.append_sheet
+    continue_on_error: true
+    data:
+      config_entry: YOUR_GOOGLE_SHEETS_ENTRY_ID
+      data:
+        Log: Daytime pre-PEAK charge log
+        Detail: Grid Consumption so far today = {{ states('sensor.workshop_grid_consumption_energy_today')
+          }} KWh
+        Detail 2: Disabled at {{ states('sensor.workshop_battery_soc') }}%
+  mode: single
+- id: '1720625260635'
+  alias: 'Energy: Battery: Enable 1st charge period during Eco Tariff period'
+  description: Enables the 1st charge period if SoC below Max SoC minus ECO Charge
+    Offset %
+  trigger:
+  - platform: time_pattern
+    hours: 2
+    minutes: /5
+  - platform: time_pattern
+    hours: 3
+    minutes: /5
+  - platform: time_pattern
+    hours: 4
+    minutes: /5
+  condition:
+  - and:
+    - condition: template
+      value_template: '{{ states(''binary_sensor.workshop_time_period_1_enable_force_charge'')
+        == ''off'' }}'
+    - condition: template
+      value_template: "{{ states('sensor.workshop_battery_soc')|float(0) <=\n   states('number.workshop_max_soc')|float(0)
+        -\n   states('input_number.eco_charge_offset')|float(0) }}"
+  action:
+  - service: foxess_modbus.update_charge_period
+    data:
+      inverter: YOUR_INVERTER_DEVICE_ID
+      charge_period: '1'
+      enable_charge_from_grid: true
+      enable_force_charge: true
+      start: 02:00:00
+      end: 04:55:00
+  - action: google_sheets.append_sheet
+    continue_on_error: true
+    data:
+      config_entry: YOUR_GOOGLE_SHEETS_ENTRY_ID
+      data:
+        Log: Overnight ECO charge log
+        Detail: Grid Consumption so far today = {{ states('sensor.workshop_grid_consumption_energy_today')
+          }} KWh
+        Detail 2: Enabled at {{ states('sensor.workshop_battery_soc') }}%
+  mode: single
+- id: '1720626084395'
+  alias: 'Energy: Battery: Disable 1st charge period during Eco Tariff period'
+  description: Disables the 1st charge period if SoC >= the batteries current Max
+    SoC %
+  trigger:
+  - platform: time_pattern
+    hours: 2
+    minutes: /5
+  - platform: time_pattern
+    hours: 3
+    minutes: /5
+  - platform: time_pattern
+    hours: 4
+    minutes: /5
+  - platform: time
+    at: 05:00:00
+  condition:
+  - and:
+    - condition: template
+      value_template: '{{ states(''binary_sensor.workshop_time_period_1_enable_force_charge'')
+        == ''on'' }}'
+    - condition: template
+      value_template: "{{ states('sensor.workshop_battery_soc')|float(0) >=\n   states('number.workshop_max_soc')|float(0)
+        }}"
+  action:
+  - service: foxess_modbus.update_charge_period
+    data:
+      inverter: YOUR_INVERTER_DEVICE_ID
+      charge_period: '1'
+      enable_charge_from_grid: true
+      enable_force_charge: false
+      start: 02:00:00
+      end: 04:55:00
+  - action: google_sheets.append_sheet
+    continue_on_error: true
+    data:
+      config_entry: YOUR_GOOGLE_SHEETS_ENTRY_ID
+      data:
+        Log: Overnight ECO charge log
+        Detail: Grid Consumption so far today = {{ states('sensor.workshop_grid_consumption_energy_today')
+          }} KWh
+        Detail 2: Disabled at {{ states('sensor.workshop_battery_soc') }}%
+  mode: single
+- id: '1722951908479'
+  alias: 'Energy: Battery Switch Work mode from Feed-in First to Self Use - below
+    target Force Discharge SoC level'
+  description: Sets the work mode back to Self Use if workmode is Feed-in First and
+    the SoC is below the target SoC - it 'polls' every 5 minutes during the 16th,
+    17th & 18th hours to check condition
+  trigger:
+  - platform: time_pattern
+    hours: 16
+    minutes: /5
+  - platform: time_pattern
+    hours: 17
+    minutes: /5
+  - platform: time_pattern
+    hours: 18
+    minutes: /5
+  condition:
+  - and:
+    - condition: template
+      value_template: '{{ states(''select.workshop_work_mode'') == ''Feed-in First''
+        }}'
+    - condition: template
+      value_template: '{{ states(''sensor.workshop_battery_soc'')|float(0) < states(''input_number.target_soc_force_export'')|float(0)
+        }}'
+  action:
+  - variables:
+      workmode: Self Use
+  - service: select.select_option
+    target:
+      entity_id: select.workshop_work_mode
+    data:
+      option: '{{ workmode }}'
+  mode: single
+- id: '1723828018073'
+  alias: Adds row to spreadsheet and calender when batteries fully charged
+  description: Logs to the Google Sheets integration
+  triggers:
+  - minutes: /5
+    trigger: time_pattern
+  conditions:
+  - and:
+    - condition: template
+      value_template: '{{ states(''input_boolean.battery_full_today'') == ''off''
+        }}'
+    - condition: template
+      value_template: '{{ states(''sensor.workshop_battery_soc'')|float(0) == 100
+        }}'
+  actions:
+  - action: google_sheets.append_sheet
+    continue_on_error: true
+    data:
+      config_entry: YOUR_GOOGLE_SHEETS_ENTRY_ID
+      data:
+        Log: Battery Log - fully charged
+        Detail: '{% for state in states.weather -%} {%- if loop.first %}The {% elif
+          loop.last %} and the {% else %}, the {% endif -%} {{ state.name | lower
+          }} is {{state.state_with_unit}} {%- endfor %}.'
+        Detail 2: '{% if is_state("sun.sun", "above_horizon") -%}  The sun rose {{
+          relative_time(states.sun.sun.last_changed) }} ago. {%- else -%} The sun
+          will rise at {{ as_timestamp(state_attr("sun.sun", "next_rising")) | timestamp_local
+          }}. {%- endif %} '
+  - data:
+      entity_id: calendar.home_assistant
+      summary: Batteries 100%
+      start_date_time: '{{ now() }}'
+      end_date_time: '{{ now() + timedelta(minutes=10) }}'
+      location: '{{ states(''input_text.home_address'') }}'
+    action: calendar.create_event
+  - target:
+      entity_id: input_boolean.battery_full_today
+    data: {}
+    action: input_boolean.turn_on
+  - data:
+      title: Batteries charged
+      message: Batteries reached 100%
+    action: notify.send_message
+    target:
+      entity_id: notify.email_me
+  mode: single
+- id: '1723995992121'
+  alias: Energy - Reset Battery Full Flag
+  description: ''
+  triggers:
+  - at: 00:00:00
+    trigger: time
+  - event: sunrise
+    offset: 0
+    trigger: sun
+  conditions: []
+  actions:
+  - target:
+      entity_id: input_boolean.battery_full_today
+    data: {}
+    action: input_boolean.turn_off
+  mode: single
+- id: '1727682293238'
+  alias: 'Energy: Battery: Charge Reduction'
+  description: 'This is a simple automation that sets the charge current to 4A above
+    93% SoC and then increases it backs to 35A (the default max setting) when the
+    battery drops below 90%.
+
+    https://foxesscommunity.com/viewtopic.php?t=946'
+  trigger:
+  - platform: time_pattern
+    minutes: /10
+  condition:
+  - condition: or
+    conditions:
+    - condition: numeric_state
+      entity_id: sensor.workshop_battery_soc
+      below: 90
+    - condition: numeric_state
+      entity_id: sensor.workshop_battery_soc
+      above: 93
+  action:
+  - if:
+    - condition: numeric_state
+      entity_id: sensor.workshop_battery_soc
+      above: 92
+    then:
+    - if:
+      - condition: numeric_state
+        entity_id: sensor.workshop_max_charge_current
+        above: 10
+      then:
+      - service: number.set_value
+        data:
+          value: 4
+        target:
+          entity_id: number.workshop_max_charge_current
+      - service: logbook.log
+        data:
+          message: Setting Max Charge to 4A
+          name: Max Charge
+    else:
+    - if:
+      - condition: numeric_state
+        entity_id: sensor.workshop_battery_soc
+        below: 90
+      then:
+      - if:
+        - condition: numeric_state
+          entity_id: sensor.workshop_max_charge_current
+          below: 10
+        then:
+        - service: number.set_value
+          data:
+            value: 35
+          target:
+            entity_id: number.workshop_max_charge_current
+        - service: logbook.log
+          data:
+            message: Setting Max Charge to 35A
+            name: Max Charge
+  mode: single
+- alias: 'Energy: Battery: Max SoC according to the alternative cooking value'
+  description: Sets the Max SoC according to the alternative cooking value
+  triggers:
+  - at: '14:55:00'
+    variables:
+      maxSoC: '{{ states(''input_number.max_soc_day_alternative_cooking'') | float(states(''number.workshop_min_soc''))
+        }}'
+    trigger: time
+  conditions:
+  - condition: template
+    value_template: "{{ states('sensor.oven_today_s_consumption')|float(0) >=\n     states('input_number.energy_trigger_cooking')|float(0)
+      }}"
+  actions:
+  - target:
+      entity_id: number.workshop_max_soc
+    data:
+      value: '{{ maxSoC }}'
+    action: number.set_value
+  - data:
+      message: "Oven current power: {{ states('sensor.oven_current_consumption') }} W,
+        \ntoday's usage: {{ states('sensor.oven_today_s_consumption') }} kWh. \n\nWorkshop
+        heater is currently using: {{ states('sensor.heater_current_consumption')
+        }} W, \ntoday's usage: {{ states('sensor.heater_today_s_consumption') }} kWh.
+        \n\nAs a result, Max SoC has been adjusted to {{ states('number.workshop_max_soc')
+        }}% \n(instead of the usual {{ states('input_number.max_soc_day') }}% for
+        daytime operation).\n\nBattery SoC is currently {{ states('sensor.workshop_battery_soc')
+        }}%.\n\n{% set diff = states('sensor.workshop_battery_soc')|float(0) - states('number.workshop_max_soc')|float(0)
+        %}\n\n{% if diff > 5 %}\n✅ The battery is comfortably {{ diff | round(1) }}%
+        above the adjusted Max SoC — no additional charging is expected before the
+        4 pm peak period.\n{% elif diff > 0 %}\n⚠️ The battery is only {{ diff | round(1)
+        }}% above the adjusted Max SoC — monitor in case pre-peak charging is still
+        required.\n{% else %}\n❗ The battery is {{ diff | abs | round(1) }}% **below**
+        the target Max SoC — a top-up is likely needed before 4 pm peak begins.\n{%
+        endif %}"
+      title: Bumped up Max SoC Day as looks like we're cooking or using heater
+    action: notify.send_message
+    target:
+      entity_id: notify.email_me
+  mode: single
+  id: '1733254185943'
+- id: '1740657511428'
+  alias: 'Energy: set Max SoC ECO based on tomorrow''s PV forecast'
+  description: Sets the Max SoC ECO according to the forecast for tomorrow
+  triggers:
+  - at: '22:15:00'
+    trigger: time
+  conditions: []
+  actions:
+  - choose:
+    - conditions:
+      - condition: numeric_state
+        entity_id: sensor.solcast_pv_forecast_forecast_tomorrow
+        above: input_number.pv_forecasthigh_threshold
+      sequence:
+      - target:
+          entity_id: input_number.max_soc_eco
+        data:
+          value: '{{ states(''input_number.max_soc_eco_high'') | float(0) }}'
+        action: input_number.set_value
+      - data:
+          message: Setting Max SoC ECO to {{ states('input_number.max_soc_eco_high')
+            }}% as PV forcast is {{ states('sensor.solcast_pv_forecast_forecast_tomorrow')
+            }}kWh
+          name: Max SoC ECO
+        action: logbook.log
+    - conditions:
+      - condition: numeric_state
+        entity_id: sensor.solcast_pv_forecast_forecast_tomorrow
+        above: input_number.pv_forecastmed_threshold
+      sequence:
+      - target:
+          entity_id: input_number.max_soc_eco
+        data:
+          value: '{{ states(''input_number.max_soc_eco_medium'') | float(0) }}'
+        action: input_number.set_value
+      - data:
+          message: Setting Max SoC ECO to {{ states('input_number.max_soc_eco_medium')
+            }}% as PV forcast is {{ states('sensor.solcast_pv_forecast_forecast_tomorrow')
+            }}kWh
+          name: Max SoC ECO
+        action: logbook.log
+    - conditions:
+      - condition: numeric_state
+        entity_id: sensor.solcast_pv_forecast_forecast_tomorrow
+        above: input_number.pv_forecastlow_threshold
+      sequence:
+      - target:
+          entity_id: input_number.max_soc_eco
+        data:
+          value: '{{ states(''input_number.max_soc_eco_low'') | float(0) }}'
+        action: input_number.set_value
+      - data:
+          message: Setting Max SoC ECO to {{ states('input_number.max_soc_eco_low')
+            }}% as PV forcast is {{ states('sensor.solcast_pv_forecast_forecast_tomorrow')
+            }}kWh
+          name: Max SoC ECO
+        action: logbook.log
+    default:
+    - target:
+        entity_id: input_number.max_soc_eco
+      data:
+        value: '{{ states(''input_number.max_soc_eco_default'') | float(0) }}'
+      action: input_number.set_value
+    - data:
+        message: Setting Max SoC ECO to default {{ states('input_number.max_soc_eco_default')
+          }}% PV forcast is {{ states('sensor.solcast_pv_forecast_forecast_tomorrow')
+          }}kWh - check why default?
+        name: Max SoC ECO
+      action: logbook.log
+  - data:
+      entity_id: calendar.home_assistant
+      summary: Forecast PV = {{ states('sensor.solcast_pv_forecast_forecast_tomorrow')
+        }}kWh Max SoC ECO = {{ states('input_number.max_soc_eco') }}%
+      start_date_time: '{{ now() }}'
+      end_date_time: '{{ now() + timedelta(minutes=10) }}'
+      location: '{{ states(''input_text.home_address'') }}'
+    action: calendar.create_event
+  - action: google_sheets.append_sheet
+    continue_on_error: true
+    data:
+      config_entry: YOUR_GOOGLE_SHEETS_ENTRY_ID
+      data:
+        Log: PV Forecasts setting Max SoC ECO
+        Detail: Tomorrow PV forecast {{ states('sensor.solcast_pv_forecast_forecast_tomorrow')
+          }}kWh
+        Detail 2: Todays actual PV {{ states('sensor.generation_today') }}kWh
+  - data:
+      message: Tomorrow's forecast PV = {{ states('sensor.solcast_pv_forecast_forecast_tomorrow')
+        }} kWh Max SoC ECO set to {{ states('input_number.max_soc_eco') }}% for the
+        overnight charge.
+    action: notify.send_message
+    target:
+      entity_id: notify.email_me
+  mode: single
+- id: '1740673832275'
+  alias: 'Energy: Reset the Max SoC ECO to default'
+  description: ''
+  triggers:
+  - at: input_datetime.off_peak_energy_end
+    trigger: time
+  conditions: []
+  actions:
+  - target:
+      entity_id: input_number.max_soc_eco
+    data:
+      value: '{{ states(''input_number.max_soc_eco_default'') | float(0) }}'
+    action: input_number.set_value
+  mode: single
+- alias: 'Energy: set flag to force peak export based on remaining PV forecast'
+  description: Sets the flag to force peak export based on the PV forecast for the
+    remainder of the day and notifies by email
+  triggers:
+  - trigger: time
+    at:
+      entity_id: input_datetime.peak_energy_start
+      offset: -00:05:00
+  conditions: []
+  actions:
+  - choose:
+    - conditions:
+      - condition: numeric_state
+        entity_id: sensor.solcast_pv_forecast_forecast_remaining_today
+        above: input_number.input_number_pv_forecastpeak_export_threshold
+      sequence:
+      - action: input_boolean.turn_on
+        metadata: {}
+        data: {}
+        target:
+          entity_id: input_boolean.peak_tariff_export_enabled
+      - action: notify.send_message
+        data:
+          title: 'Energy: Peak export ON'
+          message: '{%- set soc = states(''sensor.workshop_battery_soc'') | float(0)
+            -%}
+
+            {%- set bms_kwh = states(''sensor.workshop_bms_kwh_remaining'') | float(0)
+            -%}
+
+            {%- set capacity = (bms_kwh / (soc / 100)) | round(1) if soc > 0 else
+            0 -%}
+
+            {%- set pv_remaining = states(''sensor.solcast_pv_forecast_forecast_remaining_today'')
+            | float(0) | round(2) -%}
+
+            {%- set target_soc = states(''input_number.target_soc_force_export'')
+            | float(0) -%}
+
+            {%- set target_kwh = (capacity * target_soc / 100) | round(2) -%}
+
+            {%- set threshold = states(''input_number.input_number_pv_forecastpeak_export_threshold'')
+            | float(0) -%}
+
+            {%- set export_rate = states(''input_number.feed_in_rate_peak'') | float(0)
+            -%}
+
+            {%- set load_kw = states(''sensor.workshop_load_power'') | float(0) -%}
+
+            {%- set peak_start = states(''input_datetime.peak_energy_start'') -%}
+
+            {%- set peak_end = states(''input_datetime.peak_energy_end'') -%}
+
+            {%- set hours_of_peak = (peak_end[0:2]|int + peak_end[3:5]|int/60) - (peak_start[0:2]|int
+            + peak_start[3:5]|int/60) -%}
+
+            {%- set house_during_peak = (load_kw * hours_of_peak) | round(2) -%}
+
+            {%- set net_pv_during_peak = [pv_remaining - house_during_peak, 0] | max
+            | round(2) -%}
+
+            {%- set est_at_peak = [[bms_kwh + net_pv_during_peak, 0] | max, capacity]
+            | min | round(2) -%}
+
+            {%- set exportable = [est_at_peak - target_kwh, 0] | max | round(2) -%}
+
+            {%- set value = (exportable * export_rate) | round(2) -%}
+
+            Export flag: ON — PV forecast meets threshold, exporting during peak tariff.
+
+
+            Peak window:        {{ peak_start[0:5] }} – {{ peak_end[0:5] }}
+
+
+            PV remaining today: {{ pv_remaining }} kWh  (threshold: {{ threshold }}
+            kWh)
+
+            House load now:     {{ load_kw | round(2) }} kW
+
+            House draw (peak):  ~{{ house_during_peak }} kWh over {{ hours_of_peak
+            | int }}h
+
+            Net during peak:    ~{{ net_pv_during_peak }} kWh  (PV remaining extends
+            past {{ peak_end[0:5] }})
+
+
+            Battery now:        {{ bms_kwh }} kWh ({{ soc }}%)
+
+            Estimated capacity: ~{{ capacity }} kWh
+
+            Battery at peak:    ~{{ est_at_peak }} kWh
+
+
+            Export target:      {{ target_soc }}% = {{ target_kwh }} kWh
+
+            Exportable energy:  ~{{ exportable }} kWh
+
+            Export rate:        £{{ export_rate }}/kWh
+
+            Estimated value:    ~£{{ value }}'
+        target:
+          entity_id: notify.email_me
+    default:
+    - action: input_boolean.turn_off
+      metadata: {}
+      data: {}
+      target:
+        entity_id: input_boolean.peak_tariff_export_enabled
+    - action: notify.send_message
+      data:
+        title: 'Energy: Peak export OFF'
+        message: '{%- set soc = states(''sensor.workshop_battery_soc'') | float(0)
+          -%}
+
+          {%- set bms_kwh = states(''sensor.workshop_bms_kwh_remaining'') | float(0)
+          -%}
+
+          {%- set pv_remaining = states(''sensor.solcast_pv_forecast_forecast_remaining_today'')
+          | float(0) | round(2) -%}
+
+          {%- set threshold = states(''input_number.input_number_pv_forecastpeak_export_threshold'')
+          | float(0) -%}
+
+          Export flag: OFF — PV forecast below threshold, peak export not enabled.
+
+
+          PV remaining today: {{ pv_remaining }} kWh  (threshold: {{ threshold }}
+          kWh)
+
+          Battery now:        {{ bms_kwh }} kWh ({{ soc }}%)
+
+
+          Peak window: {{ states(''input_datetime.peak_energy_start'')[0:5] }} – {{
+          states(''input_datetime.peak_energy_end'')[0:5] }}'
+      target:
+        entity_id: notify.email_me
+  mode: single
+  id: '1742382554771'
+- id: '1744108621901'
+  alias: 'Energy: Daily: Update Octopus Energy Tariffs'
+  description: Run daily at 7am to update import/export rates from Octopus Energy.
+  triggers:
+  - at: 07:00:00
+    trigger: time
+  actions:
+  - action: script.update_octopus_energy_tariffs_with_change_detection
+    data: {}
+  mode: single
+- id: d0e45d10-e1ad-4a82-aaa4-15969200914b
+  alias: 'Sensors: Weekly battery report'
+  description: '#1035 — weekly email listing sensor battery levels (Zigbee temp/motion,
+    Tasmota bridge, Cosy Pod), flagging any below input_number.sensor_battery_low_threshold
+    or not reporting. Excludes the robot vacuum.'
+  mode: single
+  triggers:
+  - trigger: time
+    at: 09:00:00
+    weekday:
+    - sun
+  conditions: []
+  actions:
+  - variables:
+      threshold: '{{ states(''input_number.sensor_battery_low_threshold'') | int(25)
+        }}'
+      report: "{%- set ns = namespace(rows=[], low=[], missing=[]) -%}\n{%- for s
+        in states.sensor\n     | selectattr('entity_id', 'match', '^sensor\\..*_battery$')\n
+        \    | rejectattr('entity_id', 'eq', 'sensor.s7_max_ultra_battery') -%}\n
+        \ {%- set name = s.name | replace(' Battery', '') | trim -%}\n  {%- if s.state
+        | is_number -%}\n    {%- set ns.rows = ns.rows + [(s.state | int, name)] -%}\n
+        \   {%- if s.state | int < threshold -%}{%- set ns.low = ns.low + [name ~
+        ' (' ~ s.state ~ '%)'] -%}{%- endif -%}\n  {%- else -%}\n    {%- set ns.missing
+        = ns.missing + [name ~ ' (' ~ s.state ~ ')'] -%}\n  {%- endif -%}\n{%- endfor
+        -%}\n{{ {'rows': ns.rows | sort(attribute=0), 'low': ns.low, 'missing': ns.missing}
+        }}"
+  - action: notify.send_message
+    target:
+      entity_id: notify.email_me
+    data:
+      title: 'Sensor batteries: {{ (report.low | count) ~ '' low'' if report.low else
+        ''all OK'' }}{{ '', '' ~ (report.missing | count) ~ '' not reporting'' if
+        report.missing else '''' }}'
+      message: '{%- if report.low or report.missing %}ACTION NEEDED
+
+        {% for l in report.low %}- LOW: {{ l }}
+
+        {% endfor %}{% for m in report.missing %}- NOT REPORTING: {{ m }}
+
+        {% endfor %}
+
+        {% else %}All sensor batteries at or above {{ threshold }}%.
+
+
+        {% endif -%}
+
+        All sensors (lowest first):
+
+        {% for r in report.rows %}{{ ''%3d'' | format(r[0]) }}%  {{ r[1] }}
+
+        {% endfor %}
+
+        Threshold: {{ threshold }}% (input_number.sensor_battery_low_threshold)'
+- id: 0259eac2-47b8-493e-8bf5-2d96f0e16e3f
+  alias: 'Energy: Free electricity slot (armed)'
+  description: 'Runs an armed free electricity slot set on the Battery & Tariffs →
+    FREE ELECTRICITY tab (#801). Night before: cap Max SoC ECO at the pre-slot target.
+    Before the slot: Force Discharge down to the target (lead time from SoC, 13.75
+    kWh usable, ~3 kW discharge, +30 min), then hold in Feed-in First. Slot: grid
+    charge to 100%, workshop grid tariff → free. End: restore Self Use / charge period
+    / Max SoC, disarm, re-apply the tariff.'
+  triggers:
+  - trigger: time
+    at: '22:30:00'
+    id: night_before
+  - trigger: template
+    value_template: '{%- set s = state_attr(''input_datetime.free_electricity_start'',
+      ''timestamp'') | float(0) -%}
+
+      {%- set soc = states(''sensor.workshop_battery_soc'') | float(0) -%}
+
+      {%- set target = states(''input_number.free_electricity_pre_soc'') | float(0)
+      -%}
+
+      {%- set hours = ([soc - target, 0] | max) / 100 * 13.75 / 3.0 + 0.5 -%}
+
+      {{ s > 0 and now().timestamp() >= s - hours * 3600 and now().timestamp() < s
+      }}'
+    id: pre_discharge
+  - trigger: state
+    entity_id: input_boolean.free_electricity_armed
+    to: 'on'
+    id: pre_discharge
+  - trigger: numeric_state
+    entity_id: sensor.workshop_battery_soc
+    below: input_number.free_electricity_pre_soc
+    id: target_reached
+  - trigger: time
+    at: input_datetime.free_electricity_start
+    id: slot_start
+  - trigger: time
+    at: input_datetime.free_electricity_end
+    id: slot_end
+  conditions:
+  - condition: state
+    entity_id: input_boolean.free_electricity_armed
+    state: 'on'
+  actions:
+  - variables:
+      s_ts: '{{ state_attr(''input_datetime.free_electricity_start'', ''timestamp'')
+        | float(0) }}'
+      start_hms: '{{ as_datetime(states(''input_datetime.free_electricity_start'')).strftime(''%H:%M:%S'')
+        }}'
+      end_hms: '{{ as_datetime(states(''input_datetime.free_electricity_end'')).strftime(''%H:%M:%S'')
+        }}'
+      slot_text: '{{ as_datetime(states(''input_datetime.free_electricity_start'')).strftime(''%a
+        %-d %b %H:%M'') }}-{{ as_datetime(states(''input_datetime.free_electricity_end'')).strftime(''%H:%M'')
+        }}'
+      soc: '{{ states(''sensor.workshop_battery_soc'') | float(0) }}'
+      target: '{{ states(''input_number.free_electricity_pre_soc'') | float(0) }}'
+      offset: '{{ states(''input_number.free_electricity_pre_soc_offset'') | float(0)
+        }}'
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: night_before
+      - condition: template
+        value_template: '{{ (s_ts | timestamp_custom(''%Y-%m-%d'')) == (now() + timedelta(days=1)).strftime(''%Y-%m-%d'')
+          }}'
+      sequence:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.max_soc_eco
+        data:
+          value: '{{ target }}'
+      - action: notify.send_message
+        target:
+          entity_id: notify.email_me
+        data:
+          title: 'Free Electricity tomorrow: {{ slot_text }}'
+          message: Max SoC ECO capped at {{ target | int }}% for the overnight charge
+            (was {{ states('input_number.max_soc_eco') | int }}% after the PV forecast).
+            Battery now {{ soc | int }}%.
+    - conditions:
+      - condition: trigger
+        id: pre_discharge
+      - condition: template
+        value_template: '{%- set hours = ([soc - target, 0] | max) / 100 * 13.75 /
+          3.0 + 0.5 -%}
+
+          {{ s_ts > 0 and now().timestamp() >= s_ts - hours * 3600 and now().timestamp()
+          < s_ts }}'
+      - condition: template
+        value_template: '{{ soc > target + offset }}'
+      - condition: template
+        value_template: '{{ states(''select.workshop_work_mode'') != ''Force Discharge''
+          }}'
+      sequence:
+      - action: foxess_modbus.update_charge_period
+        data:
+          enable_force_charge: true
+          enable_charge_from_grid: true
+          start: '{{ start_hms }}'
+          end: '{{ end_hms }}'
+          inverter: YOUR_INVERTER_DEVICE_ID
+          charge_period: '2'
+      - action: select.select_option
+        target:
+          entity_id: select.workshop_work_mode
+        data:
+          option: Force Discharge
+      - action: notify.send_message
+        target:
+          entity_id: notify.email_me
+        data:
+          title: 'Free Electricity: discharging before {{ slot_text }}'
+          message: Force Discharge from {{ soc | int }}% down to {{ target | int }}%,
+            then holding in Feed-in First until the slot.
+    - conditions:
+      - condition: trigger
+        id: target_reached
+      - condition: template
+        value_template: '{{ states(''select.workshop_work_mode'') == ''Force Discharge''
+          and s_ts > 0 and now().timestamp() < s_ts }}'
+      sequence:
+      - action: select.select_option
+        target:
+          entity_id: select.workshop_work_mode
+        data:
+          option: Feed-in First
+      - action: logbook.log
+        data:
+          name: Free Electricity
+          message: Pre-slot target {{ target | int }}% reached, holding in Feed-in
+            First
+    - conditions:
+      - condition: trigger
+        id: slot_start
+      sequence:
+      - action: foxess_modbus.update_charge_period
+        data:
+          enable_force_charge: true
+          enable_charge_from_grid: true
+          start: '{{ start_hms }}'
+          end: '{{ end_hms }}'
+          inverter: YOUR_INVERTER_DEVICE_ID
+          charge_period: '2'
+      - action: number.set_value
+        target:
+          entity_id: number.workshop_max_soc
+        data:
+          value: 100
+      - action: select.select_option
+        target:
+          entity_id: select.workshop_work_mode
+        data:
+          option: Self Use
+      - action: script.energy_apply_current_tariff
+      - action: google_sheets.append_sheet
+        continue_on_error: true
+        data:
+          config_entry: YOUR_GOOGLE_SHEETS_ENTRY_ID
+          data:
+            Log: Free Electricity Log
+            Detail: 'Starting with: {{ states(''sensor.workshop_battery_soc'') }}%
+              battery'
+            Detail 2: Grid Consumption so far today = {{ states('sensor.workshop_grid_consumption_energy_today')
+              }} KWh
+      - action: notify.send_message
+        target:
+          entity_id: notify.email_me
+        data:
+          title: Free Electricity START
+          message: 'Starting with: {{ states(''sensor.workshop_battery_soc'') }}%
+            battery, Grid Consumption so far today = {{ states(''sensor.workshop_grid_consumption_energy_today'')
+            }} kWh. Workshop grid tariff: {{ states(''select.grid_consumption_workshop'')
+            }}.'
+    - conditions:
+      - condition: trigger
+        id: slot_end
+      sequence:
+      - action: select.select_option
+        target:
+          entity_id: select.workshop_work_mode
+        data:
+          option: Self Use
+      - action: foxess_modbus.update_charge_period
+        data:
+          enable_force_charge: true
+          enable_charge_from_grid: true
+          start: '15:00:00'
+          end: '15:55:00'
+          inverter: YOUR_INVERTER_DEVICE_ID
+          charge_period: '2'
+      - delay:
+          seconds: 10
+      - action: foxess_modbus.update_charge_period
+        data:
+          enable_force_charge: false
+          enable_charge_from_grid: true
+          start: '15:00:00'
+          end: '15:55:00'
+          inverter: YOUR_INVERTER_DEVICE_ID
+          charge_period: '2'
+      - action: number.set_value
+        target:
+          entity_id: number.workshop_max_soc
+        data:
+          value: '{%- set t = now().strftime(''%H:%M:%S'') -%}
+
+            {%- set ps = states(''input_datetime.peak_energy_start'') -%}
+
+            {%- set pe = states(''input_datetime.peak_energy_end'') -%}
+
+            {{ states(''input_number.max_soc_peak'') if (ps <= t and t < pe) else
+            states(''input_number.max_soc_day'') }}'
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.free_electricity_armed
+      - action: script.energy_apply_current_tariff
+      - action: google_sheets.append_sheet
+        continue_on_error: true
+        data:
+          config_entry: YOUR_GOOGLE_SHEETS_ENTRY_ID
+          data:
+            Log: Free Electricity Log
+            Detail: 'Ending with: {{ states(''sensor.workshop_battery_soc'') }}% battery'
+            Detail 2: Grid Consumption now = {{ states('sensor.workshop_grid_consumption_energy_today')
+              }} KWh
+      - action: notify.send_message
+        target:
+          entity_id: notify.email_me
+        data:
+          title: Free Electricity END
+          message: 'Ending with: {{ states(''sensor.workshop_battery_soc'') }}% battery,
+            Grid Consumption now = {{ states(''sensor.workshop_grid_consumption_energy_today'')
+            }} kWh. Free kWh (workshop meter): {{ states(''sensor.grid_consumption_workshop_free'')
+            }}. Slot disarmed, tariff back to {{ states(''select.grid_consumption_workshop'')
+            }}.'
+  mode: queued
+  max: 10
