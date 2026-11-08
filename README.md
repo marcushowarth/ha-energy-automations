@@ -1,5 +1,12 @@
 # Home Assistant energy and battery automations
 
+![Home Assistant](https://img.shields.io/badge/Home%20Assistant-41BDF5?logo=home-assistant&logoColor=white)
+![Fox ESS](https://img.shields.io/badge/Fox%20ESS-Modbus-E60012)
+![Octopus Flux](https://img.shields.io/badge/Octopus-Flux-5840FF)
+![Solcast](https://img.shields.io/badge/Solcast-PV%20forecast-F5A623)
+![YAML](https://img.shields.io/badge/YAML-CB171E?logo=yaml&logoColor=white)
+![License: MIT](https://img.shields.io/badge/License-MIT-green)
+
 The automations and scripts that run a home battery on a time-of-use tariff, taken from a real, daily-running Home Assistant setup. The battery charges cheaply overnight, by an amount set from tomorrow's solar forecast, tops up before the evening peak, sells at the peak when the forecast allows, and takes full advantage of Octopus free electricity sessions.
 
 `automations.yaml`, `scripts.yaml` and `ENTITIES.md` are **generated** from a private config (see [How this repo is published](#how-this-repo-is-published)), so they are exactly what runs, with personal IDs replaced by placeholders.
@@ -20,7 +27,12 @@ The automations and scripts that run a home battery on a time-of-use tariff, tak
 1. **Evening, tomorrow's forecast.** *set Max SoC ECO based on tomorrow's PV forecast* picks how full to charge overnight: a sunny day needs less grid charge.
 2. **Overnight (eco rate).** *Enable / Disable 1st charge period during Eco Tariff period* turn on the grid charge while SoC is below that target, and off once it's reached. *Battery Max SoC / Min SoC setting* move the inverter's limits at each tariff boundary.
 3. **Before the peak.** *Enable / Disable 2nd charge period before Peak Tariff period* top up from the grid at the day rate if the battery is short of the peak target.
-4. **Peak (16:00 to 19:00).** If the rest of today's forecast is good, *set flag to force peak export* turns on peak export. The inverter then Force Discharges down to a target SoC, holds in Feed-in First, and goes back to Self Use when SoC drops below target (*Battery Switch Work mode ...*).
+4. **Peak (16:00 to 19:00).** If the rest of today's forecast is above a threshold, *set flag to force peak export* turns on peak export. The inverter then Force Discharges down to a target SoC, holds in Feed-in First, and goes back to Self Use when SoC drops below target (*Battery Switch Work mode ...*).
+   - **Tuning, being monitored.** After comparing against [Predbat](https://github.com/springfall2008/batpred)'s plans, the forecast threshold is now very low (0.25 kWh) and the export target SoC lower (65%). That still exports at the peak on most days, even in October, and leaves enough for the evening so the house runs on the battery until the eco rate starts.
+
+### Charge offsets
+
+The charge periods switch on when SoC is at or below the target **minus an offset** (`input_number.eco_charge_offset`, `input_number.daytime_charge_offset`, both 2%), and switch off only once the target itself is reached. Without the gap, a battery sitting at or near its target would start a grid charge for a fraction of a percent, stop, drift down with the house load, and start again. The free electricity slot uses the same idea (`input_number.free_electricity_pre_soc_offset`, 3%) before it Force Discharges.
 5. **All day.**
    - **Tariff tracking:** *Octopus Flux Tariffs* and the *apply tariff for the current time* script switch the utility meters between eco, day and peak, so the Energy dashboard prices every kWh correctly.
    - **Charge reduction:** charge current drops to 4 A above 93% SoC to be kind to the cells.
