@@ -33,11 +33,15 @@ The automations and scripts that run a home battery on a time-of-use tariff, tak
 ### Charge offsets
 
 The charge periods switch on when SoC is at or below the target **minus an offset** (`input_number.eco_charge_offset`, `input_number.daytime_charge_offset`, both 2%), and switch off only once the target itself is reached. Without the gap, a battery sitting at or near its target would start a grid charge for a fraction of a percent, stop, drift down with the house load, and start again. The free electricity slot uses the same idea (`input_number.free_electricity_pre_soc_offset`, 3%) before it Force Discharges.
-5. **All day.**
-   - **Tariff tracking:** *Octopus Flux Tariffs* and the *apply tariff for the current time* script switch the utility meters between eco, day and peak, so the Energy dashboard prices every kWh correctly.
-   - **Charge reduction:** charge current drops to 4 A above 93% SoC to be kind to the cells.
-   - **Cooking bump:** *alternative cooking value* raises the day Max SoC when the oven or a heater is drawing a lot.
-   - **Full-battery log:** a row goes into the sheet the first time the battery hits 100% each day.
+
+### Throughout the day
+
+These aren't tied to one point in the day; they react whenever their condition is met.
+
+- **Tariff tracking:** *Octopus Flux Tariffs* and the *apply tariff for the current time* script switch the utility meters between eco, day and peak, so the Energy dashboard prices every kWh correctly.
+- **Charge reduction:** charge current drops to 4 A above 93% SoC to be kind to the cells. The idea came from [this Fox ESS community thread](https://foxesscommunity.com/viewtopic.php?t=946).
+- **Cooking bump:** *alternative cooking value* raises the day Max SoC when the oven or a heater is drawing a lot.
+- **Full-battery log:** a row goes into the sheet the first time the battery hits 100% each day.
 
 ### Free electricity sessions
 
