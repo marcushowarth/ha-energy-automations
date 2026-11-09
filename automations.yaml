@@ -337,7 +337,7 @@
   mode: single
 - id: '1723828018073'
   alias: Adds row to spreadsheet and calender when batteries fully charged
-  description: Logs to the Google Sheets integration
+  description: Logs to the Google Sheets integration (was IFTTT)
   triggers:
   - minutes: /5
     trigger: time_pattern
@@ -363,13 +363,14 @@
           relative_time(states.sun.sun.last_changed) }} ago. {%- else -%} The sun
           will rise at {{ as_timestamp(state_attr("sun.sun", "next_rising")) | timestamp_local
           }}. {%- endif %} '
-  - data:
+  - action: calendar.create_event
+    target:
       entity_id: calendar.home_assistant
+    data:
       summary: Batteries 100%
       start_date_time: '{{ now() }}'
       end_date_time: '{{ now() + timedelta(minutes=10) }}'
       location: '{{ states(''input_text.home_address'') }}'
-    action: calendar.create_event
   - target:
       entity_id: input_boolean.battery_full_today
     data: {}
@@ -566,14 +567,15 @@
           }}kWh - check why default?
         name: Max SoC ECO
       action: logbook.log
-  - data:
+  - action: calendar.create_event
+    target:
       entity_id: calendar.home_assistant
+    data:
       summary: Forecast PV = {{ states('sensor.solcast_pv_forecast_forecast_tomorrow')
         }}kWh Max SoC ECO = {{ states('input_number.max_soc_eco') }}%
       start_date_time: '{{ now() }}'
       end_date_time: '{{ now() + timedelta(minutes=10) }}'
       location: '{{ states(''input_text.home_address'') }}'
-    action: calendar.create_event
   - action: google_sheets.append_sheet
     continue_on_error: true
     data:
